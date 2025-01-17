@@ -1,0 +1,28 @@
+{
+    order wake_on_lan before reverse_proxy
+    auto_https off  # Since we're behind Cloudflare
+}
+
+(common) {
+    handle_errors {
+        @502 expression {err.status_code} == 502
+        handle @502 {
+            wake_on_lan {$WOL_MAC}
+            reverse_proxy http://{$SERVER_IP}:11434 {
+                lb_try_duration 120s
+            }
+        }
+    }
+
+    reverse_proxy http://{$SERVER_IP}:11434 {
+        header_up Host {http.request.host}
+        header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+        header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+        header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+    }
+    log
+}
+
+:11434 {
+    import common
+}

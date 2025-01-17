@@ -1,0 +1,10 @@
+services:
+  ollama-wol-proxy:
+    image: ollama-wol-proxy
+    container_name: ollama-wol-proxy
+    volumes:
+      - "./Caddyfile:/etc/caddy/Caddyfile"
+    ports:
+      - "11434:11434"
+    network_mode: host
+    restart: always
