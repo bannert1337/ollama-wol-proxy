@@ -4,16 +4,39 @@
 }
 
 (common) {
-    handle_errors {
-        @502 expression {err.status_code} == 502
-        handle @502 {
-            wake_on_lan {$WOL_MAC}
-            reverse_proxy http://{$SERVER_IP}:11434 {
-                lb_try_duration 120s
+    # Cache GET /api/tags and GET /api/version
+    @cacheable path /api/tags /api/version
+    handle @cacheable {
+        reverse_proxy http://{$SERVER_IP}:11434 {
+            # If the server is offline (502), serve from cache
+            handle_errors {
+                @502 expression {err.status_code} == 502
+                handle @502 {
+                    cache {
+                        # Serve cached responses for 1 hour (3600 seconds)
+                        ttl 21600
+                    }
+                }
             }
         }
     }
 
+    # Handle POST /api/generate with WoL
+    @generate path /api/generate
+    handle @generate {
+        handle_errors {
+            @502 expression {err.status_code} == 502
+            handle @502 {
+                wake_on_lan {$WOL_MAC}
+                reverse_proxy http://{$SERVER_IP}:11434 {
+                    lb_try_duration 120s
+                }
+            }
+        }
+        reverse_proxy http://{$SERVER_IP}:11434
+    }
+
+    # Default reverse proxy for all other requests
     reverse_proxy http://{$SERVER_IP}:11434 {
         header_up Host {http.request.host}
         header_up X-Real-IP {http.request.header.CF-Connecting-IP}
